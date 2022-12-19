@@ -1,0 +1,4 @@
+ROW_HEADER = 'Row'
+COLUMN_HEADER = 'Column'
+COMPOUND_HEADER = 'Compound'
+FIELD_HEADER = 'Field'
