@@ -1,6 +1,8 @@
+import sqlite3
 from typing import Union
 
 import altair as alt
+import numpy as np
 import pandas as pd
 import streamlit as st
 from streamlit_vega_lite import altair_component
@@ -124,6 +126,23 @@ def get_median_df(assay_layout: pd.DataFrame, qa_data: pd.DataFrame, feature: st
     return df_medians
 
 
+def get_variation_df(assay_layout: pd.DataFrame, qa_data: pd.DataFrame, feature: str) -> pd.DataFrame:
+    """
+    Create a dataFrame to work with feature's median in all the wells.
+    :param assay_layout: df.
+    :param qa_data: df.
+    :param feature: str. one of the headers in the qa_data df.
+    :return: median df.
+    """
+    df_variation = pd.DataFrame()
+    for _, assay_layout_row in assay_layout.iterrows():
+        well = Well(assay_layout_row[ROW_HEADER], assay_layout_row[COLUMN_HEADER])
+        variation = variation_for_well_feature(assay_layout, qa_data, feature, well)
+        tmp_df = pd.DataFrame({ROW_HEADER: [well.row], COLUMN_HEADER: [well.column], VARIATION_HEADER: [variation]})
+        df_variation = pd.concat([df_variation, tmp_df], ignore_index=True)
+    return df_variation
+
+
 def heatmap(df_medians: pd.DataFrame) -> pd.DataFrame:
     """
     Create 2D heatmap of selected feature median values.
@@ -198,7 +217,6 @@ if qa_data is not None and assay_layout is not None:
 
         test_group_variation = variation_for_well_feature(assay_layout, qa_data, feature, wells)
 
-        # TODO: DMSO variation calculation based on Yossi's answer
         box_plot_df = pd.DataFrame({'group': [DMSO, 'test-group'], VARIATION_HEADER: [1, test_group_variation]})
         box_plot = alt.Chart(box_plot_df).mark_bar().encode(
             x='group:O',
@@ -209,3 +227,18 @@ if qa_data is not None and assay_layout is not None:
         )
 
         st.altair_chart(box_plot)
+
+    # SQL search
+    db_conn = sqlite3.connect('file.db')
+
+    sql_data_df = qa_data.select_dtypes(include=np.number)
+    df_variation = get_variation_df(assay_layout, qa_data, feature)
+    sql_data_df = pd.merge(sql_data_df, df_variation, how="left", on=[ROW_HEADER, COLUMN_HEADER])
+    sql_data_df.to_sql(name='data', con=db_conn, if_exists='replace', index=False)
+
+    assay_layout.to_sql(name='assay', con=db_conn, if_exists='replace', index=False)
+
+    threshold = st.slider(label='Variance threshold', min_value=0, max_value=99, step=5)
+
+    retrieved_df_from_db = pd.read_sql(f'select * from data where {VARIATION_HEADER}>{threshold}', db_conn)
+    retrieved_df_from_db
