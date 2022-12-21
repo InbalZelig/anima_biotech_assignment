@@ -123,16 +123,13 @@ def get_median_df(assay_layout: pd.DataFrame, qa_data: pd.DataFrame, feature: st
     return df_medians
 
 
-def heatmap(assay_layout: pd.DataFrame, qa_data: pd.DataFrame, feature: str) -> pd.DataFrame:
+def heatmap(df_medians: pd.DataFrame) -> pd.DataFrame:
     """
     Create 2D heatmap of selected feature median values.
     The heatmap enable brushing of a set of wells.
-    :param assay_layout: df.
-    :param qa_data: df.
-    :param feature: str. one of the headers in the qa_data df.
+    :param df_medians: df.
     :return: filtered median df based on the brushing.
     """
-    df_medians = get_median_df(assay_layout, qa_data, feature)
 
     @st.cache
     def altair_heatmap():
@@ -144,6 +141,8 @@ def heatmap(assay_layout: pd.DataFrame, qa_data: pd.DataFrame, feature: str) -> 
                 color=alt.condition(selector, f'{MEDIAN_HEADER}:Q', alt.value('lightgray'))
             ).add_selection(
                 selector
+            ).properties(
+                title=f'Median Heatmap of the plate'
             )
         )
 
@@ -177,7 +176,18 @@ if qa_data is not None and assay_layout is not None:
     feature = st.selectbox('Select a feature:', features)
     qa_data_feature = qa_data[coordinates_columns + [feature]]
 
-    test_group = heatmap(assay_layout, qa_data, feature)
+    df_medians = get_median_df(assay_layout, qa_data, feature)
+
+    test_group = heatmap(df_medians)
     if test_group is not None:
         st.write("Selected wells")
         st.write(test_group)
+
+    c = alt.Chart(qa_data).mark_bar().encode(
+        alt.X(f"{feature}:Q", bin=True),
+        y="count()"
+    ).properties(
+        title=f'Histogram for: {feature}'
+    )
+
+    st.altair_chart(c)
