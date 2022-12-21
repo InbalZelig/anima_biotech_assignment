@@ -5,7 +5,7 @@ import pandas as pd
 import streamlit as st
 from streamlit_vega_lite import altair_component
 
-from conf import ROW_HEADER, COLUMN_HEADER, COMPOUND_HEADER, FIELD_HEADER, DMSO, MEDIAN_HEADER
+from conf import *
 from well import Well
 
 st.title('Image Validation App')
@@ -87,19 +87,20 @@ def get_dmso_wells(assay_layout: pd.DataFrame) -> [Well]:
     return wells
 
 
-def variation_for_well_feature(assay_layout: pd.DataFrame, qa_data: pd.DataFrame, feature: str, well: Well) -> float:
+def variation_for_well_feature(assay_layout: pd.DataFrame, qa_data: pd.DataFrame, feature: str,
+                               wells: Union[Well, list]) -> float:
     """
     Compute the feature variation of the given well & feature.
     The variation calculated as (well median)/(DMSO median) of the feature.
     :param assay_layout: df.
     :param qa_data: df.
     :param feature: str. one of the headers in the qa_data df.
-    :param well: Well object.
+    :param wells: a list of wells or a single well object.
     :return: variation (float).
     """
     dmso_median = get_dmso_median(assay_layout, qa_data, feature)
     if dmso_median != 0:
-        well_median = get_median_feature(qa_data, feature, well)
+        well_median = get_median_feature(qa_data, feature, wells)
         variation = well_median / dmso_median
         return variation
     else:
@@ -176,18 +177,35 @@ if qa_data is not None and assay_layout is not None:
     feature = st.selectbox('Select a feature:', features)
     qa_data_feature = qa_data[coordinates_columns + [feature]]
 
-    df_medians = get_median_df(assay_layout, qa_data, feature)
-
-    test_group = heatmap(df_medians)
-    if test_group is not None:
-        st.write("Selected wells")
-        st.write(test_group)
-
-    c = alt.Chart(qa_data).mark_bar().encode(
+    histogram_chart = alt.Chart(qa_data).mark_bar().encode(
         alt.X(f"{feature}:Q", bin=True),
         y="count()"
     ).properties(
         title=f'Histogram for: {feature}'
     )
 
-    st.altair_chart(c)
+    st.altair_chart(histogram_chart)
+
+    st.write('Choose wells for further analysis:')
+    df_medians = get_median_df(assay_layout, qa_data, feature)
+    test_group = heatmap(df_medians)
+
+    if test_group is not None:
+        wells = []
+        for _, row in test_group.iterrows():
+            well = Well(row[ROW_HEADER], row[COLUMN_HEADER])
+            wells.append(well)
+
+        test_group_variation = variation_for_well_feature(assay_layout, qa_data, feature, wells)
+
+        # TODO: DMSO variation calculation based on Yossi's answer
+        box_plot_df = pd.DataFrame({'group': [DMSO, 'test-group'], VARIATION_HEADER: [1, test_group_variation]})
+        box_plot = alt.Chart(box_plot_df).mark_bar().encode(
+            x='group:O',
+            y=f"{VARIATION_HEADER}:Q"
+        ).properties(
+            title=f'Selected wells variation',
+            width=400
+        )
+
+        st.altair_chart(box_plot)
