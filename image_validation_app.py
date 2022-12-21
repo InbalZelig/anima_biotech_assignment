@@ -1,9 +1,11 @@
 from typing import Union
 
+import altair as alt
 import pandas as pd
 import streamlit as st
+from streamlit_vega_lite import altair_component
 
-from conf import ROW_HEADER, COLUMN_HEADER, COMPOUND_HEADER, FIELD_HEADER, DMSO
+from conf import ROW_HEADER, COLUMN_HEADER, COMPOUND_HEADER, FIELD_HEADER, DMSO, MEDIAN_HEADER
 from well import Well
 
 st.title('Image Validation App')
@@ -104,6 +106,62 @@ def variation_for_well_feature(assay_layout: pd.DataFrame, qa_data: pd.DataFrame
         st.error('DMSO median is zero! Can\'t calculate well variation.')
 
 
+def get_median_df(assay_layout: pd.DataFrame, qa_data: pd.DataFrame, feature: str) -> pd.DataFrame:
+    """
+    Create a dataFrame to work with feature's median in all the wells.
+    :param assay_layout: df.
+    :param qa_data: df.
+    :param feature: str. one of the headers in the qa_data df.
+    :return: median df.
+    """
+    df_medians = pd.DataFrame()
+    for _, assay_layout_row in assay_layout.iterrows():
+        well = Well(assay_layout_row[ROW_HEADER], assay_layout_row[COLUMN_HEADER])
+        median = get_median_feature(qa_data, feature, well)
+        tmp_df = pd.DataFrame({ROW_HEADER: [well.row], COLUMN_HEADER: [well.column], MEDIAN_HEADER: [median]})
+        df_medians = pd.concat([df_medians, tmp_df], ignore_index=True)
+    return df_medians
+
+
+def heatmap(assay_layout: pd.DataFrame, qa_data: pd.DataFrame, feature: str) -> pd.DataFrame:
+    """
+    Create 2D heatmap of selected feature median values.
+    The heatmap enable brushing of a set of wells.
+    :param assay_layout: df.
+    :param qa_data: df.
+    :param feature: str. one of the headers in the qa_data df.
+    :return: filtered median df based on the brushing.
+    """
+    df_medians = get_median_df(assay_layout, qa_data, feature)
+
+    @st.cache
+    def altair_heatmap():
+        selector = alt.selection_interval()
+        return (
+            alt.Chart(df_medians).mark_rect().encode(
+                x=f'{COLUMN_HEADER}:O',
+                y=f'{ROW_HEADER}:O',
+                color=alt.condition(selector, f'{MEDIAN_HEADER}:Q', alt.value('lightgray'))
+            ).add_selection(
+                selector
+            )
+        )
+
+    event_dict = altair_component(altair_chart=altair_heatmap())
+
+    col_bounds, row_bounds = event_dict.get(COLUMN_HEADER), event_dict.get(ROW_HEADER)
+    if col_bounds:
+        col_min, col_max = min(col_bounds), max(col_bounds)
+        row_min, row_max = min(row_bounds), max(row_bounds)
+        test_group = df_medians[
+            (df_medians[COLUMN_HEADER] >= col_min)
+            & (df_medians[COLUMN_HEADER] <= col_max)
+            & (df_medians[ROW_HEADER] >= row_min)
+            & (df_medians[ROW_HEADER] <= row_max)
+            ]
+        return test_group
+
+
 left_column, right_column = st.columns(2)
 with left_column:
     qa_data = load_qa_data()
@@ -119,16 +177,7 @@ if qa_data is not None and assay_layout is not None:
     feature = st.selectbox('Select a feature:', features)
     qa_data_feature = qa_data[coordinates_columns + [feature]]
 
-    st.write('Select well:')
-    left_column, right_column = st.columns(2)
-    with left_column:
-        row_number = st.number_input('Insert row number', min_value=2, max_value=15, step=1)
-    with right_column:
-        column_number = st.number_input('Insert column number', min_value=2, max_value=23, step=1)
-
-    well = Well(row_number, column_number)
-    st.write('Selected compound:', well.get_compound_name(assay_layout))
-    st.write('Well median:', get_median_feature(qa_data_feature, feature, well))
-    st.write('DMSO median:', get_dmso_median(assay_layout, qa_data, feature))
-    st.write('Well variation: (well median/DMSO median)',
-             variation_for_well_feature(assay_layout, qa_data, feature, well))
+    test_group = heatmap(assay_layout, qa_data, feature)
+    if test_group is not None:
+        st.write("Selected wells")
+        st.write(test_group)
