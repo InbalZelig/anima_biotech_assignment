@@ -16,7 +16,6 @@ def sql_save(db_conn, assay_layout, qa_data, feature) -> None:
     sql_data_df = qa_data.select_dtypes(include=np.number)
     df_variation = get_variation_df(assay_layout, qa_data, feature)
     sql_data_df = pd.merge(sql_data_df, df_variation, how="left", on=[ROW_HEADER, COLUMN_HEADER])
-    sql_data_df = sql_data_df[COORDINATES_COLUMNS + [feature, VARIATION_HEADER]]
     sql_data_df.to_sql(name='data', con=db_conn, if_exists='replace', index=False)
     assay_layout.to_sql(name='assay', con=db_conn, if_exists='replace', index=False)
 

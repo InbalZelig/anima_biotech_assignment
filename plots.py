@@ -47,6 +47,12 @@ def heatmap(df_medians: pd.DataFrame) -> pd.DataFrame:
 
 
 def histogram(df: pd.DataFrame, feature: str):
+    """
+    Create histogram plot for the given feature.
+    :param df: df.
+    :param feature: str.
+    :return: altair plot
+    """
     return alt.Chart(df).mark_bar().encode(
         alt.X(f"{feature}:Q", bin=True),
         y="count()"
@@ -56,12 +62,22 @@ def histogram(df: pd.DataFrame, feature: str):
 
 
 def box_plot_test_group(test_group: pd.DataFrame, assay_layout: pd.DataFrame, qa_data: pd.DataFrame, feature: str):
+    """
+    Create a box plot based on the selected test-group.
+    :param test_group: df.
+    :param assay_layout: df.
+    :param qa_data: df.
+    :param feature: str.
+    :return: altair plot.
+    """
     wells = []
     for _, row in test_group.iterrows():
         well = Well(row[ROW_HEADER], row[COLUMN_HEADER])
         wells.append(well)
+
     test_group_variation = variation_for_well_feature(assay_layout, qa_data, feature, wells)
     box_plot_df = pd.DataFrame({'group': [DMSO, 'test-group'], VARIATION_HEADER: [1, test_group_variation]})
+
     box_plot = alt.Chart(box_plot_df).mark_bar().encode(
         x='group:O',
         y=f"{VARIATION_HEADER}:Q"

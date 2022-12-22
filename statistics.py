@@ -65,12 +65,12 @@ def variation_for_well_feature(assay_layout: pd.DataFrame, qa_data: pd.DataFrame
     :return: variation (float).
     """
     dmso_median = get_dmso_median(assay_layout, qa_data, feature)
-    if dmso_median != 0:
+    if dmso_median == 0:
+        st.error('DMSO median is zero! Can\'t calculate well variation.')
+    else:
         well_median = get_median_feature(qa_data, feature, wells)
         variation = well_median / dmso_median
         return variation
-    else:
-        st.error('DMSO median is zero! Can\'t calculate well variation.')
 
 
 def get_median_df(assay_layout: pd.DataFrame, qa_data: pd.DataFrame, feature: str) -> pd.DataFrame:
@@ -98,10 +98,14 @@ def get_variation_df(assay_layout: pd.DataFrame, qa_data: pd.DataFrame, feature:
     :param feature: str. one of the headers in the qa_data df.
     :return: median df.
     """
-    df_variation = pd.DataFrame()
-    for _, assay_layout_row in assay_layout.iterrows():
-        well = Well(assay_layout_row[ROW_HEADER], assay_layout_row[COLUMN_HEADER])
-        variation = variation_for_well_feature(assay_layout, qa_data, feature, well)
-        tmp_df = pd.DataFrame({ROW_HEADER: [well.row], COLUMN_HEADER: [well.column], VARIATION_HEADER: [variation]})
-        df_variation = pd.concat([df_variation, tmp_df], ignore_index=True)
-    return df_variation
+    dmso_median = get_dmso_median(assay_layout, qa_data, feature)
+    if dmso_median == 0:
+        st.error('DMSO median is zero! Can\'t calculate variation.')
+    else:
+        df_variation = pd.DataFrame()
+        for _, assay_layout_row in assay_layout.iterrows():
+            well = Well(assay_layout_row[ROW_HEADER], assay_layout_row[COLUMN_HEADER])
+            variation = variation_for_well_feature(assay_layout, qa_data, feature, well)
+            tmp_df = pd.DataFrame({ROW_HEADER: [well.row], COLUMN_HEADER: [well.column], VARIATION_HEADER: [variation]})
+            df_variation = pd.concat([df_variation, tmp_df], ignore_index=True)
+        return df_variation
