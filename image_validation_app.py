@@ -5,7 +5,7 @@ import streamlit as st
 from conf import COORDINATES_COLUMNS, DB_FILE
 from load_data import load_assay_layout, load_qa_data
 from plots import heatmap, histogram, box_plot_test_group
-from sql_search import sql_save, sql_retrieve_above_threshold
+from sql_search import sql_save, sql_retrieve_above_threshold, get_connection
 from statistics import get_median_df
 
 st.title('Image Validation App')
@@ -41,7 +41,7 @@ if qa_data is not None and assay_layout is not None:
 
     # SQL search
     if st.checkbox('SQL search'):
-        db_conn = sqlite3.connect(DB_FILE)
+        db_conn = get_connection()
 
         sql_save(db_conn, assay_layout, qa_data_feature, feature)
 
